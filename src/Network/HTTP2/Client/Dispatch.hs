@@ -1,5 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE PackageImports #-}
+
 module Network.HTTP2.Client.Dispatch where
 
 import           Control.Exception (throwIO)
@@ -15,7 +17,7 @@ import           GHC.Exception (Exception)
 import           Network.HPACK as HPACK
 import qualified Network.HPACK.Token as HPACK
 import           Network.HTTP2.Frame as HTTP2
-
+import "http2"   Network.HTTP2.Client
 import           Network.HTTP2.Client.Channels
 import           Network.HTTP2.Client.Exceptions
 

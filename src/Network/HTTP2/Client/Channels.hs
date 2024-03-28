@@ -15,8 +15,6 @@ import           Network.HTTP2.Frame (StreamId, FrameHeader, FramePayload, Frame
 
 import           Network.HTTP2.Client.Exceptions
 
-instance Exception FrameDecodeError
-
 type FramesChan e = Chan (FrameHeader, Either e FramePayload)
 
 whenFrame

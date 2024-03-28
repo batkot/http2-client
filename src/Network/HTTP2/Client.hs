@@ -2,6 +2,7 @@
 {-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE RankNTypes         #-}
 {-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE PackageImports     #-}
 
 -- | This module defines a set of low-level primitives for starting an HTTP2
 -- session and interacting with a server.
@@ -54,10 +55,13 @@ import           Control.Monad (forever, void, when, forM_)
 import           Control.Monad.IO.Class (liftIO)
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as ByteString
+import           Data.Foldable (foldl')
 import           Data.IORef.Lifted (newIORef, atomicModifyIORef', readIORef)
 import           Data.Maybe (fromMaybe)
 import           Network.HPACK as HPACK
 import           Network.HTTP2.Frame as HTTP2
+import "http2"   Network.HTTP2.Client hiding (ClientIO)
+import "http2"   Network.HTTP2.Client.Internal hiding (ClientIO)
 import           Network.Socket (HostName, PortNumber)
 import           Network.TLS (ClientParams)
 
@@ -470,7 +474,7 @@ initHttp2Client conn encoderBufSize decoderBufSize goAwayHandler fallbackHandler
                 ret <- lift $ waitSetSettingsReply handler
                 modifySettings dispatchControl
                     (\(ConnectionSettings cli srv) ->
-                        (ConnectionSettings (HTTP2.updateSettings cli settslist) srv, ()))
+                        (ConnectionSettings (fromSettingsList cli settslist) srv, ()))
                 return ret
     let _initGoaway err errStr = do
             sId <- lift $ readMaxReceivedStreamIdIO dispatch
@@ -635,7 +639,7 @@ dispatchControlFramesStep windowUpdatesChan controlFrame@(fh, payload) control@(
             | not . testAck . flags $ fh -> do
                 atomicModifyIORef' _dispatchControlConnectionSettings
                                    (\(ConnectionSettings cli srv) ->
-                                      (ConnectionSettings cli (HTTP2.updateSettings srv settsList), ()))
+                                      (ConnectionSettings cli (fromSettingsList srv settsList), ()))
                 lift $ maybe (return ())
                       (_applySettings _dispatchControlHpackEncoder)
                       (lookup SettingsHeaderTableSize settsList)
@@ -959,4 +963,23 @@ delayException act = act `catch` slowdown
   where
     slowdown :: SomeException -> ClientIO a
     slowdown e = threadDelay 50000 >> throwIO e
+
+-- TODO: Fix this, tmp to check if we can build package as is
+-- | Updating settings.
+--
+-- >>> fromSettingsList defaultSettings [(SettingsEnablePush,0),(SettingsMaxHeaderListSize,200)]
+-- Settings {headerTableSize = 4096, enablePush = False, maxConcurrentStreams = Just 64, initialWindowSize = 262144, maxFrameSize = 16384, maxHeaderListSize = Just 200}
+{- FOURMOLU_DISABLE -}
+fromSettingsList :: Settings -> SettingsList -> Settings
+fromSettingsList settings kvs = foldl' update settings kvs
+  where
+    update def (SettingsHeaderTableSize,x)      = def { headerTableSize = x }
+    -- fixme: x should be 0 or 1
+    update def (SettingsEnablePush,x)           = def { enablePush = x > 0 }
+    update def (SettingsMaxConcurrentStreams,x) = def { maxConcurrentStreams = Just x }
+    update def (SettingsInitialWindowSize,x)    = def { initialWindowSize = x }
+    update def (SettingsMaxFrameSize,x)         = def { maxFrameSize = x }
+    update def (SettingsMaxHeaderListSize,x)    = def { maxHeaderListSize = Just x }
+    update def _                                = def
+{- FOURMOLU_ENABLE -}
 
