@@ -21,9 +21,14 @@ import Network.HTTP2.Frame as HTTP2
 #if MIN_VERSION_http2(5,0,0)
 import "http2" Network.HTTP2.Client (Settings, defaultSettings)
 #endif
-
 import Network.HTTP2.Client.Channels
 import Network.HTTP2.Client.Exceptions
+#if MIN_VERSION_http2(5,2,0)
+import Network.HTTP.Types (Header)
+import Data.CaseInsensitive (original)
+
+type HeaderList = [Header]
+#endif
 
 type DispatchChan = FramesChan FrameDecodeError
 
@@ -235,7 +240,11 @@ newHpackEncoderContext encoderBufSize = liftBase $ do
             (\n -> HPACK.setLimitForEncoding n dt)
   where
     encoder strategy dt buf ptr hdrs = do
+#if MIN_VERSION_http2(5,2,0)
+        let hdrs' = fmap (\(k, v) -> let !t = HPACK.toToken (original k) in (t, v)) hdrs
+#else
         let hdrs' = fmap (\(k, v) -> let !t = HPACK.toToken k in (t, v)) hdrs
+#endif
         remainder <- HPACK.encodeTokenHeader buf encoderBufSize strategy True dt hdrs'
         case remainder of
             ([], len) -> pure $ ByteString.fromForeignPtr ptr 0 len

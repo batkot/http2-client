@@ -72,7 +72,7 @@ import Network.Socket (HostName, PortNumber)
 import Network.TLS (ClientParams)
 
 import Network.HTTP2.Client.Channels
-import Network.HTTP2.Client.Dispatch
+import Network.HTTP2.Client.Dispatch as D
 import Network.HTTP2.Client.Exceptions
 import Network.HTTP2.Client.FrameConnection
 
@@ -260,7 +260,7 @@ data StreamThread = CST
 -- | Record holding functions one can call while in an HTTP2 client stream.
 data Http2Stream = Http2Stream
     { _headers ::
-        HPACK.HeaderList ->
+        D.HeaderList ->
         (FrameFlags -> FrameFlags) ->
         ClientIO StreamThread
     -- ^ Starts the stream with HTTP headers. Flags modifier can use
@@ -285,7 +285,7 @@ data Http2Stream = Http2Stream
 
 Trailers should be the last thing sent over a stream.
 -}
-trailers :: Http2Stream -> HPACK.HeaderList -> (FrameFlags -> FrameFlags) -> ClientIO ()
+trailers :: Http2Stream -> D.HeaderList -> (FrameFlags -> FrameFlags) -> ClientIO ()
 trailers stream hdrs flagmod = void $ _headers stream hdrs flagmod
 
 {- | Handler upon receiving a PUSH_PROMISE from the server.
@@ -687,7 +687,7 @@ dispatchControlFramesStep windowUpdatesChan controlFrame@(fh, payload) control@(
                     maybe
                         (return ())
                         (_applySettings _dispatchControlHpackEncoder)
-                        (lookup SettingsHeaderTableSize settsList)
+                        (lookup SettingsTokenHeaderTableSize settsList)
                 _dispatchControlAckSettings
             | otherwise -> do
                 handler <- lookupAndReleaseSetSettingsHandler control
@@ -1032,7 +1032,7 @@ compat_updateSettings :: Settings -> SettingsList -> Settings
 #if MIN_VERSION_http2(5,0,0)
 compat_updateSettings settings kvs = foldl' update settings kvs
   where
-    update def (SettingsHeaderTableSize,x)      = def { headerTableSize = x }
+    update def (SettingsTokenHeaderTableSize,x)      = def { headerTableSize = x }
     -- fixme: x should be 0 or 1
     update def (SettingsEnablePush,x)           = def { enablePush = x > 0 }
     update def (SettingsMaxConcurrentStreams,x) = def { maxConcurrentStreams = Just x }
